@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.0.0",
   "description": "",
-  "main": "src/monitor.ts",
+  "main": "src/bin.ts",
   "scripts": {
     "monitor": "node --loader ts-node/esm src/bin.ts monitor"
   },
