@@ -10,11 +10,23 @@ const __dirname = dirname(__filename);
 
 dotenv.config();
 
-const urls = process.env.URLS
-  ? process.env.URLS.split(",").map((url) => url.trim())
-  : [];
-if (urls.length === 0) {
-  throw new Error("URLs are not defined in the environment variables");
+const parsePages = (pagesString: string) => {
+  return pagesString.split(",").map((page) => {
+    const index = page.indexOf(":");
+    if (index === -1) throw new Error(`Invalid page entry: ${page}`);
+    const title = page.substring(0, index).trim();
+    const url = page.substring(index + 1).trim();
+    return { title, url };
+  });
+};
+const apiKey = process.env.PSI_API_KEY;
+const pages = process.env.PAGES ? parsePages(process.env.PAGES) : [];
+if (pages.length === 0) {
+  throw new Error("PAGES are not defined in the environment variables");
+}
+
+if (!apiKey) {
+  throw new Error("PSI_API_KEY is not defined in the environment variables");
 }
 
 async function fetchLighthouseScore(url: string) {
@@ -22,7 +34,7 @@ async function fetchLighthouseScore(url: string) {
   const response = await fetch(
     `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
       url
-    )}&category=performance&strategy=mobile`
+    )}&category=performance&strategy=mobile&key=${apiKey}`
   );
   if (!response.ok) {
     const error = await response.json();
@@ -34,21 +46,17 @@ async function fetchLighthouseScore(url: string) {
   return data;
 }
 
-function sanitizeFilename(url: string): string {
-  return url.replace(/^https?:\/\//, "").replace(/[\/?&]/g, "_");
-}
-
-async function saveResults(url: string, data: any) {
+async function saveResults(title: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
   await fs.ensureDir(dir);
-  const sanitizedFilename = sanitizeFilename(url) + ".json";
+  const sanitizedFilename = title + ".json";
   const filePath = path.join(dir, sanitizedFilename);
   await fs.writeJson(filePath, data, { spaces: 2 });
   console.log(`Results saved to ${filePath}`);
 }
 
-async function saveMetricsToCSV(url: string, data: any) {
+async function saveMetricsToCSV(title: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
   await fs.ensureDir(dir);
@@ -66,7 +74,7 @@ async function saveMetricsToCSV(url: string, data: any) {
   const csvWriter = createObjectCsvWriter({
     path: csvPath,
     header: [
-      { id: "url", title: "URL" },
+      { id: "title", title: "Page" },
       { id: "date", title: "Date" },
       { id: "firstContentfulPaint", title: "First Contentful Paint" },
       { id: "largestContentfulPaint", title: "Largest Contentful Paint" },
@@ -92,7 +100,7 @@ async function saveMetricsToCSV(url: string, data: any) {
   };
 
   const record = {
-    url,
+    title,
     date: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
     firstContentfulPaint: lighthouseMetrics["First Contentful Paint"],
     largestContentfulPaint: lighthouseMetrics["Largest Contentful Paint"],
@@ -104,22 +112,34 @@ async function saveMetricsToCSV(url: string, data: any) {
   await csvWriter.writeRecords([record]);
   console.log(`Metrics saved to ${csvPath}`);
 }
-
 async function monitor() {
-  const fetchPromises = urls.map(async (url) => {
+  // const fetchPromises = pages.map(async ({ title, url }) => {
+  //   try {
+  //     const data = await fetchLighthouseScore(url);
+  //     await saveResults(title, data);
+  //     await saveMetricsToCSV(title, data);
+  //   } catch (error) {
+  //     console.error(
+  //       //@ts-expect-error
+  //       `Error fetching Lighthouse score for ${url}: ${error.message}`
+  //     );
+  //   }
+  // });
+
+  // await Promise.all(fetchPromises);
+
+  for (const { title, url } of pages) {
     try {
       const data = await fetchLighthouseScore(url);
-      await saveResults(url, data);
-      await saveMetricsToCSV(url, data);
+      await saveResults(title, data);
+      await saveMetricsToCSV(title, data);
     } catch (error) {
       console.error(
         //@ts-expect-error
         `Error fetching Lighthouse score for ${url}: ${error.message}`
       );
     }
-  });
-
-  await Promise.all(fetchPromises);
+  }
 }
 
 export { monitor };
