@@ -1,0 +1,28 @@
+{
+  "name": "psi-monitor",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/monitor.ts",
+  "scripts": {
+    "monitor": "node --loader ts-node/esm src/monitor.ts monitor",
+    "open": "node --loader ts-node/esm src/monitor.ts open --url"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "csv-writer": "^1.6.0",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "open": "^10.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/yargs": "^17.0.32"
+  }
+}
