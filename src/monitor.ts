@@ -1,7 +1,6 @@
 import { format } from "date-fns";
 import fs from "fs-extra";
 import path, { dirname } from "path";
-import yargs from "yargs";
 import dotenv from "dotenv";
 import { createObjectCsvWriter } from "csv-writer";
 import { fileURLToPath } from "url";
@@ -15,7 +14,7 @@ const urls = process.env.URLS
   ? process.env.URLS.split(",").map((url) => url.trim())
   : [];
 if (urls.length === 0) {
-  throw new Error("URLS are not defined in the environment variables");
+  throw new Error("URLs are not defined in the environment variables");
 }
 
 async function fetchLighthouseScore(url: string) {
@@ -53,7 +52,17 @@ async function saveMetricsToCSV(url: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
   await fs.ensureDir(dir);
-  const csvPath = path.join(dir, "metrics.csv");
+
+  const csvPath = path.join(__dirname, "../results", "metrics.csv");
+  let append = false;
+  try {
+    await fs.access(csvPath);
+    const st = await fs.stat(csvPath);
+    append = st.size > 0;
+  } catch (error) {
+    console.log("File does not exist, creating a new one");
+  }
+
   const csvWriter = createObjectCsvWriter({
     path: csvPath,
     header: [
@@ -61,11 +70,11 @@ async function saveMetricsToCSV(url: string, data: any) {
       { id: "date", title: "Date" },
       { id: "firstContentfulPaint", title: "First Contentful Paint" },
       { id: "largestContentfulPaint", title: "Largest Contentful Paint" },
-      { id: "cumullativeLayoutShift", title: "Cumulative Layout Shift" },
+      { id: "cumulativeLayoutShift", title: "Cumulative Layout Shift" },
       { id: "totalBlockingTime", title: "Total Blocking Time" },
       { id: "speedIndex", title: "Speed Index" },
     ],
-    append: true,
+    append,
   });
 
   const lighthouse = data.lighthouseResult;
@@ -87,27 +96,13 @@ async function saveMetricsToCSV(url: string, data: any) {
     date: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
     firstContentfulPaint: lighthouseMetrics["First Contentful Paint"],
     largestContentfulPaint: lighthouseMetrics["Largest Contentful Paint"],
-    cumullativeLayoutShift: lighthouseMetrics["Cumulative Layout Shift"],
+    cumulativeLayoutShift: lighthouseMetrics["Cumulative Layout Shift"],
     totalBlockingTime: lighthouseMetrics["Total Blocking Time"],
     speedIndex: lighthouseMetrics["Speed Index"],
   };
 
   await csvWriter.writeRecords([record]);
   console.log(`Metrics saved to ${csvPath}`);
-}
-
-async function openResultsInBrowser(url: string) {
-  try {
-    const data = await fetchLighthouseScore(url);
-    const html = data.lighthouseResult.finalUrl;
-    const open = (await import("open")).default;
-    await open(html);
-  } catch (error) {
-    console.error(
-      //@ts-expect-error
-      `Error opening Lighthouse score for ${url}: ${error.message}`
-    );
-  }
 }
 
 async function monitor() {
@@ -127,21 +122,4 @@ async function monitor() {
   await Promise.all(fetchPromises);
 }
 
-const argv = yargs(process.argv.slice(2))
-  .command("monitor", "Fetch Lighthouse scores and save results", {}, monitor)
-  .command(
-    "open",
-    "Open Lighthouse result in browser",
-    {
-      url: {
-        description: "URL to test",
-        type: "string",
-        demandOption: true,
-      },
-    },
-    (args) => {
-      console.log(`Opening URL: ${args.url[1]}`);
-      openResultsInBrowser(args.url[1]);
-    }
-  )
-  .help().argv;
+export { monitor };

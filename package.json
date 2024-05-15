@@ -5,8 +5,7 @@
   "description": "",
   "main": "src/monitor.ts",
   "scripts": {
-    "monitor": "node --loader ts-node/esm src/monitor.ts monitor",
-    "open": "node --loader ts-node/esm src/monitor.ts open --url"
+    "monitor": "node --loader ts-node/esm src/bin.ts monitor"
   },
   "keywords": [],
   "author": "",
