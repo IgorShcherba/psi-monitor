@@ -2,16 +2,13 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { monitor } from "./monitor";
-import { config } from "dotenv";
-import { join } from "path";
 
 void yargs(hideBin(process.argv))
-  .option("env", {
-    alias: "e",
+  .option("config", {
+    alias: "c",
     type: "string",
-    description: "Path to the .env file",
-    demandOption: true,
-    default: ".env",
+    description: "Path to the config JSON file",
+    default: "./config.json",
   })
   .option("retries", {
     alias: "r",
@@ -30,10 +27,11 @@ void yargs(hideBin(process.argv))
     "Fetch Lighthouse scores and save results",
     {},
     async (args) => {
-      // Load the .env file
-      const envPath = join(process.cwd(), args.env as string);
-      config({ path: envPath });
-      await monitor(args.retries as number, args.delay as number);
+      await monitor(
+        args.config as string,
+        args.retries as number,
+        args.delay as number
+      );
     }
   )
   .demandCommand(1, "You need to specify a command to run")

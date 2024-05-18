@@ -4,15 +4,35 @@ import path from "path";
 import { setTimeout } from "timers/promises";
 
 import { createObjectCsvWriter } from "csv-writer";
-import { config } from "dotenv";
 
-const parsePages = (pagesString: string) => {
-  return pagesString.split(",").map((page) => {
-    const index = page.indexOf(":");
-    if (index === -1) throw new Error(`Invalid page entry: ${page}`);
-    const title = page.substring(0, index).trim();
-    const url = page.substring(index + 1).trim();
-    return { title, url };
+interface PageConfig {
+  title: string;
+  url: string;
+}
+
+interface Config {
+  apiKey: string;
+  pages: PageConfig[];
+}
+
+const readConfig = async (configPath: string): Promise<Config> => {
+  console.log(`Reading config from ${configPath}`);
+  const data = await fs.readJson(configPath);
+  if (!data.apiKey) {
+    throw new Error("API key is not defined in the config file");
+  }
+  if (!data.pages || !Array.isArray(data.pages)) {
+    throw new Error("Pages are not defined correctly in the config file");
+  }
+  return data;
+};
+
+const parsePages = (pages: PageConfig[]) => {
+  return pages.map((page) => {
+    if (!page.title || !page.url) {
+      throw new Error(`Invalid page entry: ${JSON.stringify(page)}`);
+    }
+    return { title: page.title.trim(), url: page.url.trim() };
   });
 };
 
@@ -67,6 +87,7 @@ async function fetchLighthouseScore({
     }
   }
 }
+
 async function saveResults(title: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
@@ -136,7 +157,14 @@ async function saveMetricsToCSV(title: string, data: any) {
   await csvWriter.writeRecords([record]);
   console.log(`Metrics saved to ${csvPath}`);
 }
-async function monitor(retries: number, delay: number) {
+
+async function monitor(
+  configPath: string = "./config.json",
+  retries: number,
+  delay: number
+) {
+  const config = await readConfig(configPath);
+
   // const fetchPromises = pages.map(async ({ title, url }) => {
   //   try {
   //     const data = await fetchLighthouseScore(url);
@@ -151,10 +179,10 @@ async function monitor(retries: number, delay: number) {
   // });
 
   // await Promise.all(fetchPromises);
-  config();
 
-  const apiKey = process.env.PSI_API_KEY;
-  const pages = process.env.PAGES ? parsePages(process.env.PAGES) : [];
+  const apiKey = config.apiKey;
+  const pages = parsePages(config.pages);
+
   if (pages.length === 0) {
     throw new Error("PAGES are not defined in the environment variables");
   }

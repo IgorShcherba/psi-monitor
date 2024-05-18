@@ -39,3 +39,5 @@ yarn-error.log
 
 # Ignore the results directory if you don't want to include test results in the repository
 results/
+
+config.json
