@@ -1,14 +1,9 @@
 import { format } from "date-fns";
 import fs from "fs-extra";
-import path, { dirname } from "path";
-import dotenv from "dotenv";
+import path from "path";
+
 import { createObjectCsvWriter } from "csv-writer";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-dotenv.config();
+import { config } from "dotenv";
 
 const parsePages = (pagesString: string) => {
   return pagesString.split(",").map((page) => {
@@ -19,17 +14,8 @@ const parsePages = (pagesString: string) => {
     return { title, url };
   });
 };
-const apiKey = process.env.PSI_API_KEY;
-const pages = process.env.PAGES ? parsePages(process.env.PAGES) : [];
-if (pages.length === 0) {
-  throw new Error("PAGES are not defined in the environment variables");
-}
 
-if (!apiKey) {
-  throw new Error("PSI_API_KEY is not defined in the environment variables");
-}
-
-async function fetchLighthouseScore(url: string) {
+async function fetchLighthouseScore(url: string, apiKey: string) {
   console.log(`Fetching Lighthouse score for ${url}`);
   const response = await fetch(
     `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
@@ -50,7 +36,10 @@ async function saveResults(title: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
   await fs.ensureDir(dir);
-  const sanitizedFilename = title + ".json";
+  const sanitizedFilename = `${title}-${format(
+    new Date(),
+    "yyyy-MM-dd_HH:mm:ss"
+  )}.json`;
   const filePath = path.join(dir, sanitizedFilename);
   await fs.writeJson(filePath, data, { spaces: 2 });
   console.log(`Results saved to ${filePath}`);
@@ -127,10 +116,21 @@ async function monitor() {
   // });
 
   // await Promise.all(fetchPromises);
+  config();
+
+  const apiKey = process.env.PSI_API_KEY;
+  const pages = process.env.PAGES ? parsePages(process.env.PAGES) : [];
+  if (pages.length === 0) {
+    throw new Error("PAGES are not defined in the environment variables");
+  }
+
+  if (!apiKey) {
+    throw new Error("PSI_API_KEY is not defined in the environment variables");
+  }
 
   for (const { title, url } of pages) {
     try {
-      const data = await fetchLighthouseScore(url);
+      const data = await fetchLighthouseScore(url, apiKey);
       await saveResults(title, data);
       await saveMetricsToCSV(title, data);
     } catch (error) {

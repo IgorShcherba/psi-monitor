@@ -1,11 +1,17 @@
 {
   "name": "psi-monitor",
-  "type": "module",
   "version": "1.0.0",
   "description": "",
-  "main": "src/bin.ts",
+  "main": "dist/bin.ts",
+  "bin": {
+    "psi-monitor": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "monitor": "node --loader ts-node/esm src/bin.ts monitor"
+    "build": "tsc",
+    "monitor": "chmod +x ./dist/bin.js && ./dist/bin.js run"
   },
   "keywords": [],
   "author": "",
