@@ -15,12 +15,18 @@ const parsePages = (pagesString: string) => {
   });
 };
 
-async function fetchLighthouseScore(url: string, apiKey: string) {
+async function fetchLighthouseScore(
+  url: string,
+  apiKey: string,
+  signal: AbortSignal
+) {
   console.log(`Fetching Lighthouse score for ${url}`);
+
   const response = await fetch(
     `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
       url
-    )}&category=performance&strategy=mobile&key=${apiKey}`
+    )}&category=performance&strategy=mobile&key=${apiKey}`,
+    { signal }
   );
   if (!response.ok) {
     const error = await response.json();
@@ -128,12 +134,24 @@ async function monitor() {
     throw new Error("PSI_API_KEY is not defined in the environment variables");
   }
 
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  process.on("SIGINT", () => {
+    console.log("Aborting requests...");
+    controller.abort();
+  });
+
   for (const { title, url } of pages) {
     try {
-      const data = await fetchLighthouseScore(url, apiKey);
+      const data = await fetchLighthouseScore(url, apiKey, signal);
       await saveResults(title, data);
       await saveMetricsToCSV(title, data);
     } catch (error) {
+      if (signal.aborted) {
+        console.log("Request aborted by the user.");
+        break;
+      }
       console.error(
         //@ts-expect-error
         `Error fetching Lighthouse score for ${url}: ${error.message}`

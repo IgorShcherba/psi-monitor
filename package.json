@@ -9,6 +9,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=16"
+  },
   "scripts": {
     "build": "tsc",
     "monitor": "chmod +x ./dist/bin.js && ./dist/bin.js run"
