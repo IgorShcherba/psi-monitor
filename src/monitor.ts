@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import fs from "fs-extra";
 import path from "path";
 import { setTimeout } from "timers/promises";
-
+import inquirer from "inquirer";
 import { createObjectCsvWriter } from "csv-writer";
 
 interface PageConfig {
@@ -183,77 +183,162 @@ async function saveMetricsToCSV({
   console.log(`Metrics saved to ${csvPath}`);
 }
 
-async function monitor(configPath: string = "./config.json") {
+async function retryWithDelay(
+  fn: () => Promise<any>,
+  retries: number,
+  delay: number
+): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt < retries) {
+        //@ts-expect-error
+        console.error(`Attempt ${attempt} failed: ${error.message}`);
+        console.log(`Retrying in ${delay}ms...`);
+        await setTimeout(delay);
+      } else {
+        console.error(`Failed after ${retries} attempts.`);
+        throw error;
+      }
+    }
+  }
+}
+
+async function monitor(configPath: string) {
   const config = await readConfig(configPath);
+  const {
+    apiKey,
+    resultsDir = "../results",
+    retries = 3,
+    delay = 3000,
+    pages,
+  } = config;
 
-  // const fetchPromises = pages.map(async ({ title, url }) => {
-  //   try {
-  //     const data = await fetchLighthouseScore(url);
-  //     await saveResults(title, data);
-  //     await saveMetricsToCSV(title, data);
-  //   } catch (error) {
-  //     console.error(
-  //       //@ts-expect-error
-  //       `Error fetching Lighthouse score for ${url}: ${error.message}`
-  //     );
-  //   }
-  // });
-
-  // await Promise.all(fetchPromises);
-
-  const apiKey = config.apiKey;
-  const pages = parsePages(config.pages);
-  const retries = config.retries || 5;
-  const delay = config.delay || 500;
-  const resultsDir = config.resultsDir || "./results";
-
-  if (pages.length === 0) {
-    throw new Error("PAGES are not defined in the environment variables");
-  }
-
-  if (!apiKey) {
-    throw new Error("PSI_API_KEY is not defined in the environment variables");
-  }
+  const parsedPages = parsePages(pages);
 
   const controller = new AbortController();
   const signal = controller.signal;
-  let successCount = 0;
-  let failureCount = 0;
 
   process.on("SIGINT", () => {
     console.log("Aborting requests...");
     controller.abort();
   });
 
-  for (const { title, url, context } of pages) {
-    try {
-      const data = await fetchLighthouseScore({
-        url,
-        apiKey,
-        signal,
-        retries,
-        delay,
-      });
-      await saveResults({ title, data, resultsDir, context });
-      await saveMetricsToCSV({ title, data, resultsDir, context });
+  let successCount = 0;
+  let failureCount = 0;
+  let failedPages: PageConfig[] = [];
 
+  for (const page of parsedPages) {
+    try {
+      const data = await retryWithDelay(
+        () =>
+          fetchLighthouseScore({
+            url: page.url,
+            apiKey,
+            signal,
+            retries,
+            delay,
+          }),
+        retries,
+        delay
+      );
+      await saveResults({
+        context: page.context,
+        title: page.title,
+        data,
+        resultsDir,
+      });
+      await saveMetricsToCSV({
+        context: page.context,
+        title: page.title,
+        data,
+        resultsDir,
+      });
       successCount++;
     } catch (error) {
       if (signal.aborted) {
         console.log("Request aborted by the user.");
         break;
       }
-      failureCount++;
       console.error(
-        //@ts-expect-error
-        `Error fetching Lighthouse score for ${url}: ${error.message}`
+        // @ts-expect-error
+        `Error fetching Lighthouse score for ${page.url}: ${error.message}`
       );
+      failureCount++;
+      failedPages.push(page);
     }
   }
 
-  console.info(`\nSummary:`);
+  console.log(`\nSummary:`);
   console.log(`Successful requests: ${successCount}`);
   console.log(`Failed requests: ${failureCount}`);
+
+  if (failedPages.length > 0) {
+    const { retry } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "retry",
+        message: `There were ${failedPages.length} failed pages. Do you want to retry them?`,
+      },
+    ]);
+
+    if (retry) {
+      successCount = 0;
+      failureCount = 0;
+      const newFailedPages: PageConfig[] = [];
+
+      for (const page of failedPages) {
+        try {
+          const data = await retryWithDelay(
+            () =>
+              fetchLighthouseScore({
+                url: page.url,
+                apiKey,
+                signal,
+                retries,
+                delay,
+              }),
+            retries,
+            delay
+          );
+          await saveResults({
+            context: page.context,
+            title: page.title,
+            data,
+            resultsDir,
+          });
+          await saveMetricsToCSV({
+            context: page.context,
+            title: page.title,
+            data,
+            resultsDir,
+          });
+          successCount++;
+        } catch (error) {
+          if (signal.aborted) {
+            console.log("Request aborted by the user.");
+            break;
+          }
+          console.error(
+            // @ts-expect-error
+            `Error fetching Lighthouse score for ${page.url}: ${error.message}`
+          );
+          failureCount++;
+          newFailedPages.push(page);
+        }
+      }
+
+      console.log(`\nRetry Summary:`);
+      console.log(`Successful requests: ${successCount}`);
+      console.log(`Failed requests: ${failureCount}`);
+
+      if (newFailedPages.length > 0) {
+        console.log(`Failed pages after retry: ${newFailedPages.length}`);
+        console.log(`Failed pages: ${JSON.stringify(newFailedPages, null, 2)}`);
+      }
+    }
+  }
 }
 
 export { monitor };
