@@ -1,0 +1,18 @@
+{
+  "apiKey": "YOUR_API_KEY",
+  "pages": [
+    {
+      "title": "Home",
+      "url": "https:/example.com",
+      "context": "staging"
+    },
+    {
+      "title": "PDP",
+      "url": "https:/example.com/pdp",
+      "context": "staging"
+    }
+  ],
+  "retries": 5,
+  "delay": 3000,
+  "resultsDir": "./results"
+}

@@ -7,7 +7,7 @@ This project monitors the performance of web pages using PageSpeed Insights API.
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Environment Variables](#environment-variables)
+- [Config file](#config-file)
 - [Scripts](#scripts)
 - [Results Storage](#results-storage)
 
@@ -33,7 +33,7 @@ This project monitors the performance of web pages using PageSpeed Insights API.
 
 ## Usage
 
-1. Create a `.env` file in the root directory of the project and configure the necessary environment variables. Refer to the [Environment Variables](#environment-variables) section for details.
+1. Create a `.env` file in the root directory of the project and configure the necessary variables. Refer to the [Config file](#config-file) section for details.
 
 2. Run the monitor script to fetch Lighthouse scores and save results:
 
@@ -41,13 +41,29 @@ This project monitors the performance of web pages using PageSpeed Insights API.
    npm run monitor
    ```
 
-## Environment Variables
+## Config file
 
-Create a `.env` file in the root directory and set the following environment variables:
+Create a `config.json` file in the root directory and set the variables as in the sample file:
 
-```env
-API_KEY=your_psi_api_key
-PAGES=Shelf:https://www-staging.autozone.com.mx/baterias-arranque-y-carga/bateria,Category:https://www-staging.autozone.com.mx/refacciones
+```json
+{
+  "pages": [
+    {
+      "title": "Home",
+      "url": "https://www.example.com",
+      "context": "staging"
+    },
+    {
+      "title": "PDP",
+      "url": "https://www.example.com/pdp",
+      "context": "staging"
+    }
+  ],
+  "apiKey": "YOUR_API_KEY",
+  "resultsDir": "./results",
+  "retries": 3,
+  "delay": 1000
+}
 ```
 
 ## Scripts

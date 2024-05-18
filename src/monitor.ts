@@ -6,6 +6,7 @@ import { setTimeout } from "timers/promises";
 import { createObjectCsvWriter } from "csv-writer";
 
 interface PageConfig {
+  context: string;
   title: string;
   url: string;
 }
@@ -32,10 +33,14 @@ const readConfig = async (configPath: string): Promise<Config> => {
 
 const parsePages = (pages: PageConfig[]) => {
   return pages.map((page) => {
-    if (!page.title || !page.url) {
+    if (!page.context || !page.title || !page.url) {
       throw new Error(`Invalid page entry: ${JSON.stringify(page)}`);
     }
-    return { title: page.title.trim(), url: page.url.trim() };
+    return {
+      context: page.context.trim(),
+      title: page.title.trim(),
+      url: page.url.trim(),
+    };
   });
 };
 
@@ -91,9 +96,21 @@ async function fetchLighthouseScore({
   }
 }
 
-async function saveResults(title: string, data: any, resultsDir: string) {
+type SaveResultsArgs = {
+  context: string;
+  title: string;
+  data: any;
+  resultsDir: string;
+};
+
+async function saveResults({
+  context,
+  title,
+  data,
+  resultsDir,
+}: SaveResultsArgs) {
   const date = format(new Date(), "yyyy-MM-dd");
-  const dir = path.join(resultsDir, date);
+  const dir = path.join(resultsDir, context, date);
   await fs.ensureDir(dir);
   const sanitizedFilename = `${title}-${format(
     new Date(),
@@ -104,12 +121,17 @@ async function saveResults(title: string, data: any, resultsDir: string) {
   console.log(`Results saved to ${filePath}`);
 }
 
-async function saveMetricsToCSV(title: string, data: any, resultsDir: string) {
+async function saveMetricsToCSV({
+  title,
+  data,
+  resultsDir,
+  context,
+}: SaveResultsArgs) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(resultsDir, date);
   await fs.ensureDir(dir);
 
-  const csvPath = path.join(__dirname, "../results", "metrics.csv");
+  const csvPath = path.join(resultsDir, context, "metrics.csv");
   let append = false;
   try {
     await fs.access(csvPath);
@@ -184,6 +206,7 @@ async function monitor(configPath: string = "./config.json") {
   const retries = config.retries || 5;
   const delay = config.delay || 500;
   const resultsDir = config.resultsDir || "./results";
+
   if (pages.length === 0) {
     throw new Error("PAGES are not defined in the environment variables");
   }
@@ -202,7 +225,7 @@ async function monitor(configPath: string = "./config.json") {
     controller.abort();
   });
 
-  for (const { title, url } of pages) {
+  for (const { title, url, context } of pages) {
     try {
       const data = await fetchLighthouseScore({
         url,
@@ -211,8 +234,8 @@ async function monitor(configPath: string = "./config.json") {
         retries,
         delay,
       });
-      await saveResults(title, data, resultsDir);
-      await saveMetricsToCSV(title, data, resultsDir);
+      await saveResults({ title, data, resultsDir, context });
+      await saveMetricsToCSV({ title, data, resultsDir, context });
 
       successCount++;
     } catch (error) {
