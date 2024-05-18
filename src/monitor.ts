@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import fs from "fs-extra";
 import path from "path";
+import { setTimeout } from "timers/promises";
 
 import { createObjectCsvWriter } from "csv-writer";
 import { config } from "dotenv";
@@ -15,29 +16,57 @@ const parsePages = (pagesString: string) => {
   });
 };
 
-async function fetchLighthouseScore(
-  url: string,
-  apiKey: string,
-  signal: AbortSignal
-) {
+async function fetchLighthouseScore({
+  url,
+  apiKey,
+  signal,
+  retries = 3,
+  delay = 500,
+}: {
+  url: string;
+  apiKey: string;
+  signal: AbortSignal;
+  retries: number;
+  delay: number;
+}): Promise<any> {
   console.log(`Fetching Lighthouse score for ${url}`);
 
-  const response = await fetch(
-    `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
-      url
-    )}&category=performance&strategy=mobile&key=${apiKey}`,
-    { signal }
-  );
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(
-      `Failed to fetch Lighthouse score for ${url}: ${error.error.message}`
-    );
-  }
-  const data = await response.json();
-  return data;
-}
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
+          url
+        )}&category=performance&strategy=mobile&key=${apiKey}`,
+        { signal }
+      );
 
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(
+          `Failed to fetch Lighthouse score for ${url}: ${error.error.message}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      if (signal.aborted) {
+        console.log("Request aborted by the user.");
+        throw error;
+      }
+      //@ts-expect-error
+      console.error(`Attempt ${attempt} failed: ${error.message}`);
+
+      if (attempt < retries) {
+        console.log(`Retrying in ${delay}ms...`);
+        await setTimeout(delay);
+      } else {
+        console.log(`Failed after ${retries} attempts.`);
+        throw error;
+      }
+    }
+  }
+}
 async function saveResults(title: string, data: any) {
   const date = format(new Date(), "yyyy-MM-dd");
   const dir = path.join(__dirname, "../results", date);
@@ -107,7 +136,7 @@ async function saveMetricsToCSV(title: string, data: any) {
   await csvWriter.writeRecords([record]);
   console.log(`Metrics saved to ${csvPath}`);
 }
-async function monitor() {
+async function monitor(retries: number, delay: number) {
   // const fetchPromises = pages.map(async ({ title, url }) => {
   //   try {
   //     const data = await fetchLighthouseScore(url);
@@ -136,6 +165,8 @@ async function monitor() {
 
   const controller = new AbortController();
   const signal = controller.signal;
+  let successCount = 0;
+  let failureCount = 0;
 
   process.on("SIGINT", () => {
     console.log("Aborting requests...");
@@ -144,20 +175,32 @@ async function monitor() {
 
   for (const { title, url } of pages) {
     try {
-      const data = await fetchLighthouseScore(url, apiKey, signal);
+      const data = await fetchLighthouseScore({
+        url,
+        apiKey,
+        signal,
+        retries,
+        delay,
+      });
       await saveResults(title, data);
       await saveMetricsToCSV(title, data);
+      successCount++;
     } catch (error) {
       if (signal.aborted) {
         console.log("Request aborted by the user.");
         break;
       }
+      failureCount++;
       console.error(
         //@ts-expect-error
         `Error fetching Lighthouse score for ${url}: ${error.message}`
       );
     }
   }
+
+  console.info(`\nSummary:`);
+  console.log(`Successful requests: ${successCount}`);
+  console.log(`Failed requests: ${failureCount}`);
 }
 
 export { monitor };
