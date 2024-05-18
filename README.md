@@ -68,9 +68,9 @@ Create a `config.json` file in the root directory and set the variables as in th
 
 ## Scripts
 
-**npm run monitor**: Fetches Lighthouse scores for the specified in the .env pages and saves results in JSON and CSV formats.
+`npm run monitor`: Fetches Lighthouse scores for the specified in the `config.json` file pages and saves results in JSON and CSV formats.
 
 ## Results Storage
 
-JSON Files: The full Lighthouse result for each page is saved as a JSON file in the results/YYYY-MM-DD directory, where YYYY-MM-DD is the current date.
-CSV File: Key performance metrics are saved in a metrics.csv file in the results/YYYY-MM-DD directory. Each row in the CSV file corresponds to a page, including the title, URL, date, and various performance metrics such as First Contentful Paint, Largest Contentful Paint, Speed Index, Total Blocking Time, Cumulative Layout Shift.
+JSON Files: The full Lighthouse result for each page is saved as a JSON file in the results/'context'/YYYY-MM-DD directory, where YYYY-MM-DD is the current date.
+CSV File: Key performance metrics are saved in a metrics.csv file in the results/context/ directory. Each row in the CSV file corresponds to a page, including the title, URL, date, and various performance metrics such as First Contentful Paint, Largest Contentful Paint, Speed Index, Total Blocking Time, Cumulative Layout Shift.
