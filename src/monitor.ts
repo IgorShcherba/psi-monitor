@@ -13,6 +13,9 @@ interface PageConfig {
 interface Config {
   apiKey: string;
   pages: PageConfig[];
+  retries?: number;
+  delay?: number;
+  resultsDir?: string;
 }
 
 const readConfig = async (configPath: string): Promise<Config> => {
@@ -88,9 +91,9 @@ async function fetchLighthouseScore({
   }
 }
 
-async function saveResults(title: string, data: any) {
+async function saveResults(title: string, data: any, resultsDir: string) {
   const date = format(new Date(), "yyyy-MM-dd");
-  const dir = path.join(__dirname, "../results", date);
+  const dir = path.join(resultsDir, date);
   await fs.ensureDir(dir);
   const sanitizedFilename = `${title}-${format(
     new Date(),
@@ -101,9 +104,9 @@ async function saveResults(title: string, data: any) {
   console.log(`Results saved to ${filePath}`);
 }
 
-async function saveMetricsToCSV(title: string, data: any) {
+async function saveMetricsToCSV(title: string, data: any, resultsDir: string) {
   const date = format(new Date(), "yyyy-MM-dd");
-  const dir = path.join(__dirname, "../results", date);
+  const dir = path.join(resultsDir, date);
   await fs.ensureDir(dir);
 
   const csvPath = path.join(__dirname, "../results", "metrics.csv");
@@ -158,11 +161,7 @@ async function saveMetricsToCSV(title: string, data: any) {
   console.log(`Metrics saved to ${csvPath}`);
 }
 
-async function monitor(
-  configPath: string = "./config.json",
-  retries: number,
-  delay: number
-) {
+async function monitor(configPath: string = "./config.json") {
   const config = await readConfig(configPath);
 
   // const fetchPromises = pages.map(async ({ title, url }) => {
@@ -182,7 +181,9 @@ async function monitor(
 
   const apiKey = config.apiKey;
   const pages = parsePages(config.pages);
-
+  const retries = config.retries || 5;
+  const delay = config.delay || 500;
+  const resultsDir = config.resultsDir || "./results";
   if (pages.length === 0) {
     throw new Error("PAGES are not defined in the environment variables");
   }
@@ -210,8 +211,9 @@ async function monitor(
         retries,
         delay,
       });
-      await saveResults(title, data);
-      await saveMetricsToCSV(title, data);
+      await saveResults(title, data, resultsDir);
+      await saveMetricsToCSV(title, data, resultsDir);
+
       successCount++;
     } catch (error) {
       if (signal.aborted) {
